@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ApuntsApplicationCompose</string>
+    <string name="label_textField">Escriu aquí</string>
+</resources>

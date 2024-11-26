@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -26,14 +25,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,19 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.VectorPainter
 
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,6 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.apuntsapplicationcompose.ui.ExempleIcones
 import com.example.apuntsapplicationcompose.ui.theme.ApuntsApplicationComposeTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,74 +70,137 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ExempleViewModel()
+            ExempleNavController()
         }
     }
 }
+/*El componente Navigation tiene tres partes principales:
+
+NavController: Es responsable de navegar entre los destinos, es decir, las pantallas en tu app.
+NavGraph: Realiza la asignación de los destinos componibles a los que se navegará.
+NavHost: Es el elemento componible que funciona como contenedor para mostrar el destino actual del NavGraph.
+muestra otros destinos, según una ruta determinada.
+
+    La ruta es una string que se corresponde con un destino.
+     Por lo general, un destino es un único elemento componible (o un grupo de ellos) que corresponde a lo que ve el usuario.
+    Puedes definir las rutas de una app mediante una clase de tipo enum.
+     */
+@Composable
+fun ExempleNavController(){
+    val viewModel: AppViewModel = viewModel()
+    val navController = rememberNavController()
+    Column {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { navController.navigate("Inici") }) {
+                Text(text = "Inici")
+            }
+            Button(onClick = { navController.navigate("Login") }) {
+                Text(text = "Login")
+            }
+            Button(onClick = { navController.navigate("Registre") }) {
+                Text(text = "Registre")
+            }
+        }
+        NavHost(navController = navController, startDestination = "Inici") {
+            composable(route = "Inici") {
+                ExempleNavInici(viewModel = viewModel, navController)
+            }
+            composable(route = "Login") {
+                ExempleNavLogin()
+            }
+            composable(route = "Registre") {
+               Text(text = "Registre")
+            }
+        }
+    }
+}
+@Composable
+fun ExempleNavInici(viewModel: AppViewModel,navController: NavController){
+    Image(painter = painterResource(id = R.drawable.hhh), contentDescription ="login" ,
+        modifier = Modifier.clickable { navController.navigate("Login")  })
+}
+@Composable
+fun ExempleNavLogin(){
+    Text(text = "LOGIN")
+}
+
+
 ///---
 @Composable
-fun ExempleViewModel(){
-    val viewModel:AppViewModel= viewModel()
+fun ExempleViewModel() {
+    val viewModel: AppViewModel = viewModel()
     //app//build.gradle.kts , dins de dependencies afegir:    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
-    when(viewModel.uiState.collectAsState().value.nomUsuari){
+    when (viewModel.uiState.collectAsState().value.nomUsuari) {
         "nom" -> {
-            Nom(viewModel=viewModel)
+            Nom(viewModel = viewModel)
         }
+
         else -> {
-        NomIPuntuacio(viewModel = viewModel)
+            NomIPuntuacio(viewModel = viewModel)
         }
     }
 }
 
 @Composable
-fun NomIPuntuacio(viewModel: AppViewModel){
+fun NomIPuntuacio(viewModel: AppViewModel) {
     Button(modifier = Modifier.padding(top = 30.dp),
         onClick = {
-        Log.d("exemple","nom:"+viewModel.getNomUsuari() )
-        viewModel.updateNomUsuari("nom")
-            viewModel.updatePuntuacio(viewModel.getPuntuacio()+1)
-    }) {
-        Text(text = viewModel.getNomUsuari()+" - "+viewModel.getPuntuacio())
+            Log.d("exemple", "nom:" + viewModel.getNomUsuari())
+            viewModel.updateNomUsuari("nom")
+            viewModel.updatePuntuacio(viewModel.getPuntuacio() + 1)
+        }) {
+        Text(text = viewModel.getNomUsuari() + " - " + viewModel.getPuntuacio())
     }
 }
+
 @Composable
-fun Nom(viewModel: AppViewModel){
+fun Nom(viewModel: AppViewModel) {
     Button(onClick = {
-        Log.d("exemple","nom i punt:"+ viewModel.getNomUsuari() )
-        viewModel.updateNomUsuari("nom i punts") }) {
+        Log.d("exemple", "nom i punt:" + viewModel.getNomUsuari())
+        viewModel.updateNomUsuari("nom i punts")
+    }) {
         Text(text = viewModel.getNomUsuari())
     }
 }
+
 //vm2 creem una clase de dades encarregada d'estructurar la informació a guardar
 data class InfoUiState(
-    val nomUsuari:String="nom",
-    val puntuacio:Int=0
-){}
+    val nomUsuari: String = "nom",
+    val puntuacio: Int = 0
+) {}
+
 //vm1 creem una clase que extengui de ViewModel. Volem que sigui encarregada de mantenir la informació
 //sobre l'estat de l'aplicació. Volem que només aquesta classe pugui modificar l'estat de l'aplicació
-class AppViewModel: ViewModel() {
+class AppViewModel : ViewModel() {
     //vm3 StateFlow es un contenidor de dades observable. Amb MutableStateFlow creem un nou StateFlow
     private val _uiState = MutableStateFlow(InfoUiState())
+
     //vm4 Evitem que uiState sigui modificable desde fora el AppViewModel redefinint el seu métode get()
     //com que és un val no té métode set().
-    val uiState: StateFlow<InfoUiState> get()= _uiState.asStateFlow()
+    val uiState: StateFlow<InfoUiState> get() = _uiState.asStateFlow()
 
-    init{
-        _uiState.value=InfoUiState("",0)
+    init {
+        _uiState.value = InfoUiState("", 0)
     }
-    fun updateNomUsuari(nomUsuari: String){
+
+    fun updateNomUsuari(nomUsuari: String) {
         //amb copy creem una nova instancia de _uiState amb nous valors
-        _uiState.update { (it.copy(
-            nomUsuari=nomUsuari
-        )) }
+        _uiState.update {
+            (it.copy(
+                nomUsuari = nomUsuari
+            ))
+        }
     }
-    fun updatePuntuacio(puntuacio: Int){
-        _uiState.update { (it.copy(puntuacio=puntuacio)) }
+
+    fun updatePuntuacio(puntuacio: Int) {
+        _uiState.update { (it.copy(puntuacio = puntuacio)) }
     }
-    fun getNomUsuari():String{
+
+    fun getNomUsuari(): String {
         return _uiState.value.nomUsuari
     }
-    fun getPuntuacio():Int{
+
+    fun getPuntuacio(): Int {
         return _uiState.value.puntuacio
     }
 }

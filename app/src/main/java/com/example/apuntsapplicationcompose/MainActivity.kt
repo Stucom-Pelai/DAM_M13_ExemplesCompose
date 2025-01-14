@@ -1,10 +1,14 @@
 package com.example.apuntsapplicationcompose
 
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,7 +16,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +35,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -51,29 +57,321 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberAsyncImagePainter
+import coil.compose.rememberImagePainter
+
+
 import com.example.apuntsapplicationcompose.ui.ExempleIcones
 import com.example.apuntsapplicationcompose.ui.theme.ApuntsApplicationComposeTheme
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+//import kotlinx.serialization.json.Json
+import retrofit2.Call
+import retrofit2.Callback
+//import kotlinx.serialization.SerialName
+//import kotlinx.serialization.Serializable
+import retrofit2.HttpException
+import retrofit2.Response
+import retrofit2.Retrofit
+//RETROFIT CONVERTERS
+import retrofit2.converter.gson.GsonConverterFactory
+//import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+//import kotlinx.serialization.Serializable
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Headers
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.Query
+import java.io.File
+import java.io.FileOutputStream
+
+import java.io.IOException
+import java.io.InputStream
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         setContent {
-            ExempleNavController()
+//            ExempleNavController()
+            val remoteModel:RemoteViewModel=viewModel()
+                ExempleRetrofit( remoteModel)
+
         }
     }
 }
+
+data class  RemoteMessage(
+    val text:String="",
+    val photo:String=""
+)
+interface RemoteMessageInterface {
+    @GET("remote_path")
+    suspend fun getRemoteMessage(): RemoteMessage
+
+    @GET("params_path")
+    suspend fun getRemoteMessageParams(@Query("param1")param1:String,
+                                       @Query("param2")param2:String): RemoteMessage
+
+    @Headers("Accept: application/json","Content-Type: application/json")
+    @POST("post_path")
+    suspend fun postRemoteMessage(@Body remoteMessage:RemoteMessage):RemoteMessage
+
+    @Multipart
+    @POST("/upload")
+    suspend fun postImgTxt(
+        @Part file: MultipartBody.Part,
+        @Part("text") text: RequestBody,
+    ): RemoteMessage
+
+}
+sealed interface RemoteMessageUiState {
+    data class Success(val remoteMessage: RemoteMessage) : RemoteMessageUiState
+    object Error : RemoteMessageUiState
+    object Cargant : RemoteMessageUiState
+}
+
+class RemoteViewModel:ViewModel(){
+    var remoteMessageUiState: RemoteMessageUiState by mutableStateOf(RemoteMessageUiState.Cargant)
+        private set
+    init {
+        //getRemoteMessage()
+    }
+    private val client = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            // Mostra les capçaleres al Log
+            val headers = response.headers
+            for (name in headers.names()) {
+                Log.d("exemple", " HEADERS: $name: ${headers[name]}")
+            }
+            Log.d("Response", "Status Code: ${response.code}")
+
+            response // Retorna la resposta per continuar amb l'execució normal
+        }
+        .build()
+    private val connexio =
+        Retrofit.Builder()
+            .baseUrl("http://10.0.2.2:8080")
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+//    val contentType = "application/json".toMediaType()
+    fun getRemoteMessage(){
+        viewModelScope.launch {
+            remoteMessageUiState=RemoteMessageUiState.Cargant
+            try{
+
+                val endPoint = connexio.create(RemoteMessageInterface::class.java)
+                val resposta = endPoint.getRemoteMessage()
+//                val resposta = connexio.create(RemoteMessageInterface::class.java).getRemoteMessage()
+                Log.d("exemple", "RESPOSTA ${resposta.photo}")
+                remoteMessageUiState=RemoteMessageUiState.Success(resposta)
+            } catch (e: Exception) {
+                Log.d("exemple", "RESPOSTA ERROR ${e.message} ${e.printStackTrace()}")
+                remoteMessageUiState= RemoteMessageUiState.Error
+            }
+        }
+    }
+    fun getRemoteMessageParams(){
+        viewModelScope.launch {
+            remoteMessageUiState=RemoteMessageUiState.Cargant
+            try{
+
+                val endPoint = connexio.create(RemoteMessageInterface::class.java)
+                val resposta = endPoint.getRemoteMessageParams("v1","v3")
+//                val resposta = connexio.create(RemoteMessageInterface::class.java).getRemoteMessage()
+                Log.d("exemple", "RESPOSTA ${resposta.photo}")
+                remoteMessageUiState=RemoteMessageUiState.Success(resposta)
+            } catch (e: Exception) {
+                Log.d("exemple", "RESPOSTA ERROR ${e.message} ${e.printStackTrace()}")
+                remoteMessageUiState= RemoteMessageUiState.Error
+            }
+        }
+    }
+    fun postRemoteMessage(){
+        viewModelScope.launch {
+            remoteMessageUiState=RemoteMessageUiState.Cargant
+            try{
+                val connexio =
+                    Retrofit.Builder()
+                        .baseUrl("http://10.0.2.2:8080")
+                        .addConverterFactory(GsonConverterFactory.create())
+                        .build()
+                val endPoint = connexio.create(RemoteMessageInterface::class.java)
+                val resposta = endPoint.postRemoteMessage(RemoteMessage("hi","santa"))
+                Log.d("exemple", "RESPOSTA ${resposta.photo}")
+                remoteMessageUiState=RemoteMessageUiState.Success(resposta)
+            } catch (e: Exception) {
+                Log.d("exemple", "RESPOSTA ERROR ${e.message} ${e.printStackTrace()}")
+                remoteMessageUiState= RemoteMessageUiState.Error
+            }
+        }
+    }
+    fun postImageWithText(file:File,text: String){
+        viewModelScope.launch {
+            remoteMessageUiState=RemoteMessageUiState.Cargant
+            try{
+                val connexio =
+                    Retrofit.Builder()
+                        .baseUrl("http://10.0.2.2:8080")
+                        .addConverterFactory(GsonConverterFactory.create())
+                        .build()
+                val endPoint = connexio.create(RemoteMessageInterface::class.java)
+                //
+                val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+                val textBody = text.toRequestBody("text/plain".toMediaTypeOrNull())
+                //
+                val resposta = endPoint.postImgTxt(body,textBody)
+                Log.d("exemple", "RESPOSTA ${resposta.photo}")
+                remoteMessageUiState=RemoteMessageUiState.Success(resposta)
+            } catch (e: Exception) {
+                Log.d("exemple", "RESPOSTA ERROR ${e.message} ${e.printStackTrace()}")
+                remoteMessageUiState= RemoteMessageUiState.Error
+            }
+        }
+    }
+}
+
+@Composable
+fun ExempleRetrofit(remoteViewModel: RemoteViewModel) {
+
+    val remoteMessageUiState = remoteViewModel.remoteMessageUiState
+
+  Column( Modifier.fillMaxWidth().fillMaxHeight()) {
+      Button(onClick = {
+          Log.d("exemple", "clkRetrofit")
+          remoteViewModel.getRemoteMessage()
+      }, Modifier.align(alignment = Alignment.Start)) {
+          Text("Exemple Retrofit")
+      }
+      when (remoteMessageUiState) {
+          is RemoteMessageUiState.Cargant -> Text("Loading... info")
+          is RemoteMessageUiState.Error -> Text("Error")
+          is RemoteMessageUiState.Success -> {
+              Text(remoteMessageUiState.remoteMessage.photo)
+          }
+      }
+      Button(onClick = {
+          Log.d("exemple", "clkRetrofitGETParams")
+          remoteViewModel.getRemoteMessageParams()
+      }, Modifier.align(alignment = Alignment.Start)) {
+          Text("Exemple GET Params")
+      }
+      when (remoteMessageUiState) {
+          is RemoteMessageUiState.Cargant -> Text("Loading... info")
+          is RemoteMessageUiState.Error -> Text("Error")
+          is RemoteMessageUiState.Success -> {
+              Text(remoteMessageUiState.remoteMessage.photo)
+          }
+      }
+      Button(onClick = {
+          Log.d("exemple", "clkRetrofitPOST")
+          remoteViewModel.postRemoteMessage()
+      }, Modifier.align(alignment = Alignment.Start)) {
+          Text("Exemple POST Params")
+      }
+      when (remoteMessageUiState) {
+          is RemoteMessageUiState.Cargant -> Text("Loading... info")
+          is RemoteMessageUiState.Error -> Text("Error")
+          is RemoteMessageUiState.Success -> {
+              Text(remoteMessageUiState.remoteMessage.photo)
+          }
+      }
+
+      //SELECCIONA UN ARXIU
+      val context = LocalContext.current
+      var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
+      val filePickerLauncher = rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.GetContent(),
+          onResult = { uri ->
+              selectedFileUri = uri
+          }
+      )
+      Button(onClick = {
+          filePickerLauncher.launch("image/*")
+      }) {
+          Text("Seleccionar Imagen")
+      }
+      selectedFileUri?.let { uri -> //if (selectedFileUri != null) {
+          Button(onClick = {
+              val file = uriToFile(uri, context)
+              file?.let {
+                  remoteViewModel.postImageWithText(it, "Text")
+              }
+          }) {
+              Text("Enviar Imagen")
+          }
+      }
+      when (remoteMessageUiState) {
+          is RemoteMessageUiState.Cargant -> Text("Loading... info")
+          is RemoteMessageUiState.Error -> Text("Error")
+          is RemoteMessageUiState.Success -> {
+              Text(remoteMessageUiState.remoteMessage.text)
+              Text(remoteMessageUiState.remoteMessage.photo)
+              // Mostrar la imagen usando Coil
+              val imageUrl = remoteMessageUiState.remoteMessage.photo
+              if (imageUrl.isNotEmpty()) {
+                  Text("carregant imatge")
+                  Image(painter = rememberAsyncImagePainter("http://10.0.2.2:8080/"+imageUrl), contentDescription = null,
+                      modifier = Modifier.fillMaxWidth())
+              }
+          }
+      }
+  }
+}
+
+
+private fun uriToFile(uri: Uri, context: android.content.Context): File? {
+    val contentResolver = context.contentResolver
+    val inputStream = contentResolver.openInputStream(uri) ?: return null
+
+    // Obtener el nombre del archivo y limpiar caracteres no permitidos
+    val fileName = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        cursor.moveToFirst()
+        cursor.getString(nameIndex)
+    } ?: return null
+
+    // Crear el archivo en el directorio de caché
+    val file = File(context.cacheDir, fileName)
+
+    // Copiar los datos del inputStream al outputStream del archivo
+    inputStream.use { input ->
+        file.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    }
+
+    return file
+}
+
 /*El componente Navigation tiene tres partes principales:
 
 NavController: Es responsable de navegar entre los destinos, es decir, las pantallas en tu app.
@@ -88,6 +386,7 @@ muestra otros destinos, según una ruta determinada.
 @Composable
 fun ExempleNavController(){
     val viewModel: AppViewModel = viewModel()
+
     val navController = rememberNavController()
     Column {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -100,6 +399,9 @@ fun ExempleNavController(){
             Button(onClick = { navController.navigate("Registre") }) {
                 Text(text = "Registre")
             }
+            Button(onClick = { navController.navigate("Retrofit") }) {
+                Text(text = "Retrofit")
+            }
         }
         NavHost(navController = navController, startDestination = "Inici") {
             composable(route = "Inici") {
@@ -109,11 +411,16 @@ fun ExempleNavController(){
                 ExempleNavLogin()
             }
             composable(route = "Registre") {
-               Text(text = "Registre")
+                Text(text = "Registre")
+            }
+            composable(route = "Retrofit") {
+                //val remoteModel:RemoteViewModel=viewModel()
+//                ExempleRetrofit(viewModel = viewModel)
             }
         }
     }
 }
+
 @Composable
 fun ExempleNavInici(viewModel: AppViewModel,navController: NavController){
     Image(painter = painterResource(id = R.drawable.hhh), contentDescription ="login" ,
@@ -169,20 +476,55 @@ data class InfoUiState(
     val puntuacio: Int = 0
 ) {}
 
+
 //vm1 creem una clase que extengui de ViewModel. Volem que sigui encarregada de mantenir la informació
 //sobre l'estat de l'aplicació. Volem que només aquesta classe pugui modificar l'estat de l'aplicació
 class AppViewModel : ViewModel() {
+    /** The mutable State that stores the status of the most recent request */
+    var remoteMessageUiState: RemoteMessageUiState by mutableStateOf(RemoteMessageUiState.Cargant)
+        private set
+//    private val apiService = RemoteMessageService.retrofitService;
     //vm3 StateFlow es un contenidor de dades observable. Amb MutableStateFlow creem un nou StateFlow
+//    private val _uiState = MutableStateFlow(InfoUiState.Loading)
     private val _uiState = MutableStateFlow(InfoUiState())
-
     //vm4 Evitem que uiState sigui modificable desde fora el AppViewModel redefinint el seu métode get()
     //com que és un val no té métode set().
     val uiState: StateFlow<InfoUiState> get() = _uiState.asStateFlow()
 
+
     init {
-        _uiState.value = InfoUiState("", 0)
+        _uiState.value = InfoUiState()
+
     }
 
+
+
+    //Repositori de Info Retrofit
+//    MutableState  carece de la capacidad de guardar el estado diferente: loading, success y failure (cargando, éxito y error).
+//    El estado Loading indica que la app está esperando datos.
+//    El estado Success indica que los datos se recuperaron correctamente del servicio web.
+//    El estado Error indica cualquier error de red o conexión.
+//    private val _infoState = MutableStateFlow(String())
+//    val infoState: StateFlow<String> get() = _infoState.asStateFlow()
+//    fun updateInfo(){
+//        /*Un viewModelScope es el alcance integrado de corrutinas definido para cada ViewModel en tu app. Si se borra ViewModel, se cancela automáticamente cualquier corrutina iniciada en este alcance.
+//Puedes usar viewModelScope para iniciar la corrutina y realizar la solicitud de servicio web en segundo plano. Como viewModelScope pertenece a ViewModel, la solicitud continúa incluso si la app pasa por un cambio de configuración.*/
+//        viewModelScope.launch {
+//            try {
+//                Log.d("exemple","GET INFO");
+//                val info= InfoApi.retrofitService.getInfo()
+//                Log.d("exemple","info ${info}")
+////                Log.d("exemple","info ${info.text} , ${info.photo}")
+//
+//                _infoState.update { (info) }
+//
+////                Log.d("exemple","info ${info.text} , ${info.photo}")
+//            }catch (e:Exception){
+//                e.printStackTrace()
+//                Log.d("exemple","error! ${e.toString()}")
+//            }
+//        }
+//    }
     fun updateNomUsuari(nomUsuari: String) {
         //amb copy creem una nova instancia de _uiState amb nous valors
         _uiState.update {
@@ -203,6 +545,9 @@ class AppViewModel : ViewModel() {
     fun getPuntuacio(): Int {
         return _uiState.value.puntuacio
     }
+
+
+
 }
 
 

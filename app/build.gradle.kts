@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+
 }
 
 android {
@@ -69,5 +70,17 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+
+    // Retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+//    implementation("io.coil-kt:coil-compose:2.4.0")
+    //RETROFRIT CONVERTERS
+//    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+//    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+        implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    //COIL PER CARREGAR IMATGES ONLINE
+    implementation("io.coil-kt:coil-compose:2.1.0")
 
 }
